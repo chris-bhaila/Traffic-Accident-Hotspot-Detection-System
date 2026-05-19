@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Traffic Hotspot Prediction System</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+      #map {
+        height: 100vh;
+        width: 100%;
+      }
+      #stats {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        font-size: 14px;
+        max-width: 280px;
+      }
+      #stats h3 {
+        margin: 0 0 10px 0;
+      }
+      .stat-row {
+        margin: 4px 0;
+      }
+      .stat-label {
+        color: #666;
+      }
+      .stat-value {
+        font-weight: bold;
+      }
+      .legend {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid #eee;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 4px 0;
+      }
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+        border: 1px solid #fff;
+        box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="stats">
+      <h3>Hotspot Analysis</h3>
+      <div class="stat-row">
+        <span class="stat-label">Total Accidents: </span>
+        <span class="stat-value">{{ n_total }}</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Hotspots Found: </span>
+        <span class="stat-value">{{ n_clusters }}</span>
+      </div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #e74c3c"></div>
+          <span>Critical Risk</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #f39c12"></div>
+          <span>High Risk</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #f1c40f"></div>
+          <span>Medium Risk</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #3498db"></div>
+          <span>Low Risk</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: #ccc"></div>
+          <span>Isolated Accident</span>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+            var map = L.map("map", {
+          scrollWheelZoom: true,
+          zoomSnap: 0.5,
+          zoomDelta: 0.5,
+      }).setView([53.8, -1.55], 12);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      var riskColors = {
+          CRITICAL: "#e74c3c",
+          HIGH: "#f39c12",
+          MEDIUM: "#f1c40f",
+          LOW: "#3498db",
+      };
+
+      var accidents = {{ accidents_json|safe }};
+      var clusters = {{ clusters_json|safe }};
+
+      // Separate layers so we can toggle visibility
+      var clusterLayer = L.layerGroup().addTo(map);
+      var accidentLayer = L.layerGroup();
+
+      // Plot clusters
+      clusters.forEach(function (c) {
+          var color = riskColors[c.risk_level] || "#999";
+
+          L.circle([c.centroid_latitude, c.centroid_longitude], {
+              radius: Math.max(c.radius, 50),
+              fillColor: color,
+              color: color,
+              weight: 2,
+              opacity: 0.6,
+              fillOpacity: 0.15,
+          }).addTo(clusterLayer);
+
+          L.circleMarker([c.centroid_latitude, c.centroid_longitude], {
+              radius: Math.min(6 + c.accident_count / 2, 18),
+              fillColor: color,
+              color: "#fff",
+              weight: 2,
+              fillOpacity: 0.9,
+          })
+              .addTo(clusterLayer)
+              .bindPopup(
+                  "<div style='min-width: 180px'>" +
+                  "<h4 style='margin:0 0 8px 0; color:" + color + "'>" +
+                  c.risk_level + " RISK</h4>" +
+                  "<b>Accidents:</b> " + c.accident_count + "<br>" +
+                  "<b>Avg Severity:</b> " + c.average_severity.toFixed(2) + "/3.00<br>" +
+                  "<b>Peak Day:</b> " + c.peak_day + "<br>" +
+                  "<b>Peak Time:</b> " + c.peak_time + "<br>" +
+                  "<b>Weather:</b> " + c.dominant_weather + "<br>" +
+                  "<b>Radius:</b> " + Math.round(c.radius) + "m" +
+                  "</div>"
+              );
+      });
+
+      // Plot individual accidents (hidden by default)
+      accidents.forEach(function (acc) {
+          var severityColors = {
+              Fatal: "#e74c3c",
+              Serious: "#f39c12",
+              Slight: "#3498db",
+          };
+          L.circleMarker([acc.latitude, acc.longitude], {
+              radius: 4,
+              fillColor: severityColors[acc.severity] || "#999",
+              color: "#fff",
+              weight: 1,
+              opacity: 0.8,
+              fillOpacity: 0.7,
+          }).addTo(accidentLayer);
+      });
+
+      // Show/hide accident points based on zoom level
+      map.on("zoomend", function () {
+          if (map.getZoom() >= 15) {
+              map.addLayer(accidentLayer);
+          } else {
+              map.removeLayer(accidentLayer);
+          }
+      });
+    </script>
+  </body>
+</html>

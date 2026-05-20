@@ -1,186 +1,998 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Traffic Hotspot Prediction System</title>
     <link
       rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-        font-family: Arial, sans-serif;
-      }
+      /* Map fills everything right of sidebar, below navbar */
       #map {
-        height: 100vh;
-        width: 100%;
+        position: fixed;
+        top: 3.5rem; /* h-14 = 56px */
+        left: 20rem; /* w-80 = 320px */
+        right: 0;
+        bottom: 0;
+        z-index: 1;
       }
-      #stats {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        z-index: 1000;
-        font-size: 14px;
-        max-width: 280px;
+
+      /* Sidebar scrollbar */
+      #sidebar::-webkit-scrollbar {
+        width: 4px;
       }
-      #stats h3 {
-        margin: 0 0 10px 0;
+      #sidebar::-webkit-scrollbar-track {
+        background: transparent;
       }
-      .stat-row {
-        margin: 4px 0;
+      #sidebar::-webkit-scrollbar-thumb {
+        background: #e2e8f0;
+        border-radius: 2px;
       }
-      .stat-label {
-        color: #666;
+
+      /* Leaflet popup — clean card style */
+      .clean-popup .leaflet-popup-content-wrapper {
+        padding: 0 !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18) !important;
       }
-      .stat-value {
-        font-weight: bold;
+      .clean-popup .leaflet-popup-content {
+        margin: 0 !important;
       }
-      .legend {
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid #eee;
+      .clean-popup .leaflet-popup-tip {
+        box-shadow: none !important;
       }
-      .legend-item {
-        display: flex;
-        align-items: center;
-        margin: 4px 0;
+
+      /* Loading spinner */
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
-      .legend-dot {
-        width: 12px;
-        height: 12px;
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
         border-radius: 50%;
-        margin-right: 8px;
-        border: 1px solid #fff;
-        box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+        animation: spin 0.65s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      /* Select focus ring override */
+      select:focus {
+        outline: none;
+      }
+
+      /* ── Mobile ────────────────────────────────────────────────────────────── */
+      @media (max-width: 767px) {
+        #map {
+          left: 0 !important;
+        }
+        #sidebar {
+          width: min(320px, 85vw);
+          transform: translateX(-100%);
+          transition: transform 0.28s ease;
+          z-index: 55;
+        }
+        #sidebar.sidebar-open {
+          transform: translateX(0);
+        }
+        #sidebar-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          z-index: 50;
+        }
+        #sidebar-backdrop.backdrop-open {
+          display: block;
+        }
       }
     </style>
   </head>
-  <body>
-    <div id="map"></div>
-    <div id="stats">
-      <h3>Hotspot Analysis</h3>
-      <div class="stat-row">
-        <span class="stat-label">Total Accidents: </span>
-        <span class="stat-value">{{ n_total }}</span>
+  <body
+    class="bg-gray-100"
+    style="
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+    "
+  >
+    <!-- ═══ NAVBAR ═══════════════════════════════════════════════════════════════ -->
+    <nav
+      class="fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-5 gap-4"
+      style="background: #0f172a; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3)"
+    >
+      <!-- Hamburger (mobile only) -->
+      <button
+        id="sidebar-toggle"
+        class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
+        style="color:#94a3b8; background:rgba(255,255,255,0.08);"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <div class="flex items-center gap-2.5 flex-1 min-w-0">
+        <div
+          class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style="background: linear-gradient(135deg, #f97316, #ef4444)"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-4 h-4 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+        </div>
+        <span class="text-white font-semibold text-sm tracking-tight truncate"
+          >Traffic Hotspot Prediction</span
+        >
       </div>
-      <div class="stat-row">
-        <span class="stat-label">Hotspots Found: </span>
-        <span class="stat-value">{{ n_clusters }}</span>
+      <div class="flex items-center gap-1">
+        <a
+          href="#"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+          style="background: rgba(255, 255, 255, 0.12)"
+          >Map</a
+        >
+        <a
+          href="/analytics/"
+          class="hidden md:block px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          onmouseover="this.style.background = 'rgba(255,255,255,0.08)'"
+          onmouseout="this.style.background = 'transparent'"
+          >Analytics</a
+        >
+        <a
+          href="/admin/"
+          class="hidden md:block px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          onmouseover="this.style.background = 'rgba(255,255,255,0.08)'"
+          onmouseout="this.style.background = 'transparent'"
+          >Admin</a
+        >
       </div>
-      <div class="legend">
-        <div class="legend-item">
-          <div class="legend-dot" style="background: #e74c3c"></div>
-          <span>Critical Risk</span>
+    </nav>
+
+    <!-- Mobile backdrop -->
+    <div id="sidebar-backdrop"></div>
+
+    <!-- ═══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+    <div
+      id="sidebar"
+      class="fixed top-14 left-0 w-80 bg-white overflow-y-auto z-40"
+      style="
+        height: calc(100vh - 3.5rem);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.07);
+      "
+    >
+      <!-- Mobile close bar -->
+      <div class="md:hidden flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        <span class="text-sm font-semibold text-slate-700">Menu</span>
+        <button
+          id="sidebar-close"
+          class="flex items-center justify-center w-7 h-7 rounded-lg text-slate-400"
+          style="background:#f1f5f9;"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-5 flex flex-col gap-5">
+        <!-- Stats ─────────────────────────────────────────────────────────────── -->
+        <div>
+          <p
+            class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3"
+          >
+            Overview
+          </p>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div
+              class="rounded-xl p-3.5 border border-slate-100"
+              style="background: #f8fafc"
+            >
+              <div class="text-2xl font-black text-slate-800 leading-none">
+                {{ n_total }}
+              </div>
+              <div class="text-xs text-slate-400 mt-1">Total Accidents</div>
+            </div>
+            <div
+              class="rounded-xl p-3.5 border border-slate-100"
+              style="background: #f8fafc"
+            >
+              <div class="text-2xl font-black text-slate-800 leading-none">
+                {{ n_clusters }}
+              </div>
+              <div class="text-xs text-slate-400 mt-1">Hotspots Found</div>
+            </div>
+          </div>
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background: #f39c12"></div>
-          <span>High Risk</span>
+
+        <!-- Legend ─────────────────────────────────────────────────────────────── -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+              Risk Levels
+            </p>
+            <button
+              id="toggle-all"
+              class="text-xs font-semibold transition-colors"
+              style="color:#3b82f6;"
+              onmouseover="this.style.color='#1d4ed8'"
+              onmouseout="this.style.color='#3b82f6'"
+            >Hide All</button>
+          </div>
+          <div class="grid grid-cols-2 gap-y-2 gap-x-3">
+            <div
+              class="flex items-center gap-2 cursor-pointer select-none legend-toggle"
+              data-risk="CRITICAL"
+              style="transition:opacity 0.2s;"
+            >
+              <div
+                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style="background:#e74c3c;box-shadow:0 0 0 2px rgba(231,76,60,0.2);"
+              ></div>
+              <span class="text-xs font-medium text-slate-600">Critical</span>
+              <span id="count-CRITICAL" class="text-xs text-slate-400 font-normal"></span>
+            </div>
+            <div
+              class="flex items-center gap-2 cursor-pointer select-none legend-toggle"
+              data-risk="HIGH"
+              style="transition:opacity 0.2s;"
+            >
+              <div
+                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style="background:#f39c12;box-shadow:0 0 0 2px rgba(243,156,18,0.2);"
+              ></div>
+              <span class="text-xs font-medium text-slate-600">High</span>
+              <span id="count-HIGH" class="text-xs text-slate-400 font-normal"></span>
+            </div>
+            <div
+              class="flex items-center gap-2 cursor-pointer select-none legend-toggle"
+              data-risk="MEDIUM"
+              style="transition:opacity 0.2s;"
+            >
+              <div
+                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style="background:#f1c40f;box-shadow:0 0 0 2px rgba(241,196,15,0.2);"
+              ></div>
+              <span class="text-xs font-medium text-slate-600">Medium</span>
+              <span id="count-MEDIUM" class="text-xs text-slate-400 font-normal"></span>
+            </div>
+            <div
+              class="flex items-center gap-2 cursor-pointer select-none legend-toggle"
+              data-risk="LOW"
+              style="transition:opacity 0.2s;"
+            >
+              <div
+                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style="background:#3498db;box-shadow:0 0 0 2px rgba(52,152,219,0.2);"
+              ></div>
+              <span class="text-xs font-medium text-slate-600">Low</span>
+              <span id="count-LOW" class="text-xs text-slate-400 font-normal"></span>
+            </div>
+          </div>
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background: #f1c40f"></div>
-          <span>Medium Risk</span>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- Click prompt ──────────────────────────────────────────────────────── -->
+        <div id="click-prompt" class="text-center py-4">
+          <div
+            class="w-11 h-11 rounded-full flex items-center justify-center mx-auto mb-3"
+            style="background: rgba(59, 130, 246, 0.08)"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-5 h-5"
+              style="color: #93c5fd"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"
+              />
+            </svg>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Click anywhere on the map to predict accident risk for that
+            location.
+          </p>
         </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background: #3498db"></div>
-          <span>Low Risk</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-dot" style="background: #ccc"></div>
-          <span>Isolated Accident</span>
+
+        <!-- Prediction Panel ──────────────────────────────────────────────────── -->
+        <div id="prediction-panel" style="display: none">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+              Risk Prediction
+            </p>
+            <button
+              id="btn-clear-pin"
+              title="Remove pin"
+              class="flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-slate-600 transition-colors"
+              style="background:#f1f5f9;"
+              onmouseover="this.style.background='#e2e8f0'"
+              onmouseout="this.style.background='#f1f5f9'"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Coordinates chip -->
+          <div
+            class="flex items-center gap-1.5 mb-4 px-3 py-2 rounded-lg text-xs font-mono"
+            style="background: #f1f5f9; color: #64748b"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="w-3 h-3 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+            </svg>
+            <span id="clicked-lat"></span>,&nbsp;<span id="clicked-lon"></span>
+          </div>
+
+          <!-- Inputs -->
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Day of Week</label
+              >
+              <select
+                id="sel-day"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                style="
+                  transition:
+                    border-color 0.15s,
+                    box-shadow 0.15s;
+                "
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+                <option value="Friday" selected>Friday</option>
+                <option value="Saturday">Saturday</option>
+                <option value="Sunday">Sunday</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Time (Hour)</label
+              >
+              <select
+                id="sel-time"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="7">07:00 – Morning Rush</option>
+                <option value="8">08:00 – Morning Rush</option>
+                <option value="9">09:00 – Morning Rush</option>
+                <option value="10">10:00 – Midday</option>
+                <option value="12">12:00 – Midday</option>
+                <option value="14">14:00 – Midday</option>
+                <option value="16">16:00 – Evening Rush</option>
+                <option value="17" selected>17:00 – Evening Rush</option>
+                <option value="18">18:00 – Evening Rush</option>
+                <option value="19">19:00 – Evening Rush</option>
+                <option value="21">21:00 – Night</option>
+                <option value="0">00:00 – Night</option>
+                <option value="3">03:00 – Night</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Weather</label
+              >
+              <select
+                id="sel-weather"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="fine" selected>Fine</option>
+                <option value="rain">Rain</option>
+                <option value="snow">Snow</option>
+                <option value="fog">Fog</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Road Type</label
+              >
+              <select
+                id="sel-road"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="single" selected>Single Carriageway</option>
+                <option value="dual">Dual Carriageway</option>
+                <option value="roundabout">Roundabout</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Speed Limit</label
+              >
+              <select
+                id="sel-speed"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="20">20 mph</option>
+                <option value="30" selected>30 mph</option>
+                <option value="40">40 mph</option>
+                <option value="50">50 mph</option>
+                <option value="60">60 mph</option>
+                <option value="70">70 mph</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"
+                >Light Conditions</label
+              >
+              <select
+                id="sel-light"
+                class="w-full text-sm rounded-lg px-3 py-2 bg-white border border-slate-200 text-slate-700"
+                onfocus="
+                  this.style.borderColor = '#93c5fd';
+                  this.style.boxShadow = '0 0 0 3px rgba(147,197,253,0.25)';
+                "
+                onblur="
+                  this.style.borderColor = '';
+                  this.style.boxShadow = '';
+                "
+              >
+                <option value="daylight" selected>Daylight</option>
+                <option value="dark_lit">Dark – Lights Lit</option>
+                <option value="dark_unlit">Dark – No Lighting</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Predict button -->
+          <button
+            id="btn-predict"
+            class="w-full mt-4 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white"
+            style="
+              background: linear-gradient(135deg, #3b82f6, #2563eb);
+              box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+              transition:
+                opacity 0.15s,
+                transform 0.15s;
+            "
+            onmouseover="this.style.opacity = '.9'"
+            onmouseout="this.style.opacity = '1'"
+            onmousedown="this.style.transform = 'scale(0.98)'"
+            onmouseup="this.style.transform = 'scale(1)'"
+          >
+            <span id="btn-label">Predict Risk</span>
+            <span id="btn-spinner" class="spinner" style="display: none"></span>
+          </button>
+
+          <!-- Prediction Result -->
+          <div
+            id="prediction-result"
+            style="
+              display: none;
+              opacity: 0;
+              transform: translateY(8px);
+              transition:
+                opacity 0.35s ease,
+                transform 0.35s ease;
+            "
+          >
+            <!-- Risk card -->
+            <div
+              id="result-card"
+              class="mt-4 rounded-2xl p-5 text-center"
+              style="background: #6b7280"
+            >
+              <p
+                class="text-xs font-semibold uppercase tracking-widest mb-2"
+                style="color: rgba(255, 255, 255, 0.7)"
+              >
+                Predicted Risk Level
+              </p>
+              <span
+                id="risk-badge"
+                class="text-4xl font-black text-white leading-none"
+              ></span>
+            </div>
+
+            <!-- Decision path -->
+            <div class="mt-4">
+              <p
+                class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3"
+              >
+                Decision Path
+              </p>
+              <div id="decision-path"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- ═══ MAP ══════════════════════════════════════════════════════════════════ -->
+    <div id="map"></div>
+
+    <!-- Dark map toggle (floating over map, bottom-right) -->
+    <button
+      id="dark-toggle"
+      class="flex items-center gap-2 text-xs font-semibold rounded-xl px-3 py-2"
+      style="
+        position: fixed;
+        bottom: 22px;
+        right: 14px;
+        z-index: 1000;
+        background: #fff;
+        color: #374151;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+        transition:
+          background 0.2s,
+          color 0.2s;
+      "
+    >
+      <span id="toggle-icon">🌙</span>
+      <span id="toggle-text">Dark Map</span>
+    </button>
+
+    <!-- ═══ SCRIPTS ═══════════════════════════════════════════════════════════════ -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-            var map = L.map("map", {
-          scrollWheelZoom: true,
-          zoomSnap: 0.5,
-          zoomDelta: 0.5,
-      }).setView([53.8, -1.55], 12);
+      // ── Map setup ──────────────────────────────────────────────────────────────
+      var map = L.map("map", {
+        scrollWheelZoom: true,
+        zoomSnap: 0.5,
+        zoomDelta: 0.5,
+      }).setView([27.7000, 85.3300], 13);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-
-      var riskColors = {
-          CRITICAL: "#e74c3c",
-          HIGH: "#f39c12",
-          MEDIUM: "#f1c40f",
-          LOW: "#3498db",
-      };
-
-      var accidents = {{ accidents_json|safe }};
-      var clusters = {{ clusters_json|safe }};
-
-      // Separate layers so we can toggle visibility
-      var clusterLayer = L.layerGroup().addTo(map);
-      var accidentLayer = L.layerGroup();
-
-      // Plot clusters
-      clusters.forEach(function (c) {
-          var color = riskColors[c.risk_level] || "#999";
-
-          L.circle([c.centroid_latitude, c.centroid_longitude], {
-              radius: Math.max(c.radius, 50),
-              fillColor: color,
-              color: color,
-              weight: 2,
-              opacity: 0.6,
-              fillOpacity: 0.15,
-          }).addTo(clusterLayer);
-
-          L.circleMarker([c.centroid_latitude, c.centroid_longitude], {
-              radius: Math.min(6 + c.accident_count / 2, 18),
-              fillColor: color,
-              color: "#fff",
-              weight: 2,
-              fillOpacity: 0.9,
-          })
-              .addTo(clusterLayer)
-              .bindPopup(
-                  "<div style='min-width: 180px'>" +
-                  "<h4 style='margin:0 0 8px 0; color:" + color + "'>" +
-                  c.risk_level + " RISK</h4>" +
-                  "<b>Accidents:</b> " + c.accident_count + "<br>" +
-                  "<b>Avg Severity:</b> " + c.average_severity.toFixed(2) + "/3.00<br>" +
-                  "<b>Peak Day:</b> " + c.peak_day + "<br>" +
-                  "<b>Peak Time:</b> " + c.peak_time + "<br>" +
-                  "<b>Weather:</b> " + c.dominant_weather + "<br>" +
-                  "<b>Radius:</b> " + Math.round(c.radius) + "m" +
-                  "</div>"
-              );
+      var lightTile = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
       });
 
-      // Plot individual accidents (hidden by default)
+      var darkTile = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        maxZoom: 19,
+      });
+
+      lightTile.addTo(map);
+      var isDark = false;
+
+      // ── Dark mode toggle ───────────────────────────────────────────────────────
+      document.getElementById("dark-toggle").addEventListener("click", function () {
+        if (isDark) {
+          map.removeLayer(darkTile);
+          lightTile.addTo(map);
+          document.getElementById("toggle-icon").textContent = "🌙";
+          document.getElementById("toggle-text").textContent = "Dark Map";
+          this.style.background = "#fff";
+          this.style.color = "#374151";
+          isDark = false;
+        } else {
+          map.removeLayer(lightTile);
+          darkTile.addTo(map);
+          document.getElementById("toggle-icon").textContent = "☀️";
+          document.getElementById("toggle-text").textContent = "Light Map";
+          this.style.background = "#1e293b";
+          this.style.color = "#f1f5f9";
+          isDark = true;
+        }
+      });
+
+      // ── Risk colour map ────────────────────────────────────────────────────────
+      var riskColors = {
+        CRITICAL: "#e74c3c",
+        HIGH:     "#f39c12",
+        MEDIUM:   "#f1c40f",
+        LOW:      "#3498db",
+        Slight:   "#3498db",
+        Serious:  "#f39c12",
+        Fatal:    "#e74c3c",
+      };
+
+      var riskGradients = {
+        CRITICAL: "linear-gradient(135deg,#ef4444,#b91c1c)",
+        HIGH:     "linear-gradient(135deg,#f97316,#c2410c)",
+        MEDIUM:   "linear-gradient(135deg,#eab308,#d97706)",
+        LOW:      "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+        Slight:   "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+        Serious:  "linear-gradient(135deg,#f97316,#c2410c)",
+        Fatal:    "linear-gradient(135deg,#ef4444,#b91c1c)",
+      };
+
+      // ── Data ───────────────────────────────────────────────────────────────────
+      var clusters  = {{ clusters_json|safe }};
+      var accidents = {{ accidents_json|safe }};
+
+      var riskLayers = {
+        CRITICAL: L.layerGroup().addTo(map),
+        HIGH:     L.layerGroup().addTo(map),
+        MEDIUM:   L.layerGroup().addTo(map),
+        LOW:      L.layerGroup().addTo(map),
+      };
+      var riskActive = { CRITICAL: true, HIGH: true, MEDIUM: true, LOW: true };
+
+      var accidentLayer = L.layerGroup();
+      var predictionMarker = null;
+
+      // ── Plot clusters ──────────────────────────────────────────────────────────
+      clusters.forEach(function (c) {
+        var color = riskColors[c.risk_level] || "#999";
+        var layer = riskLayers[c.risk_level] || riskLayers.LOW;
+
+        // Halo circle
+        L.circle([c.centroid_latitude, c.centroid_longitude], {
+          radius:      Math.max(c.radius, 300),
+          fillColor:   color,
+          color:       color,
+          weight:      2,
+          opacity:     0.55,
+          fillOpacity: 0.2,
+        }).addTo(layer);
+
+        // Centre dot
+        L.circleMarker([c.centroid_latitude, c.centroid_longitude], {
+          radius:      Math.min(10 + c.accident_count / 3, 24),
+          fillColor:   color,
+          color:       "#fff",
+          weight:      2.5,
+          fillOpacity: 0.92,
+        })
+          .addTo(layer)
+          .bindPopup(
+            '<div style="min-width:210px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">'
+            + '<div style="background:' + color + ';padding:13px 16px;">'
+            +   '<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;">Risk Level</div>'
+            +   '<div style="font-size:20px;font-weight:900;color:#fff;line-height:1;">' + c.risk_level + '</div>'
+            + '</div>'
+            + '<div style="padding:13px 16px;">'
+            +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+            +     _popCell("Accidents",    c.accident_count)
+            +     _popCell("Avg Severity", c.average_severity.toFixed(2))
+            +     _popCell("Peak Day",     c.peak_day)
+            +     _popCell("Peak Time",    c.peak_time)
+            +     _popCell("Weather",      c.dominant_weather)
+            +     _popCell("Radius",       Math.round(c.radius) + "m")
+            +   '</div>'
+            + '</div>'
+            + '</div>',
+            { className: "clean-popup" }
+          );
+      });
+
+      // ── Count badges ───────────────────────────────────────────────────────────
+      var riskCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+      clusters.forEach(function (c) {
+        if (riskCounts[c.risk_level] !== undefined) riskCounts[c.risk_level]++;
+      });
+      ["CRITICAL", "HIGH", "MEDIUM", "LOW"].forEach(function (r) {
+        var el = document.getElementById("count-" + r);
+        if (el) el.textContent = "(" + riskCounts[r] + ")";
+      });
+
+      function _popCell(label, value) {
+        return '<div>'
+          + '<div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">' + label + '</div>'
+          + '<div style="font-size:13px;font-weight:700;color:#1e293b;">' + value + '</div>'
+          + '</div>';
+      }
+
+      // ── Risk level filter toggles ──────────────────────────────────────────────
+      document.querySelectorAll(".legend-toggle").forEach(function (el) {
+        el.addEventListener("click", function () {
+          var risk = this.getAttribute("data-risk");
+          riskActive[risk] = !riskActive[risk];
+          if (riskActive[risk]) {
+            map.addLayer(riskLayers[risk]);
+            this.style.opacity = "1";
+            this.querySelector("span").style.textDecoration = "none";
+          } else {
+            map.removeLayer(riskLayers[risk]);
+            this.style.opacity = "0.35";
+            this.querySelector("span").style.textDecoration = "line-through";
+          }
+          // Sync "All" button label
+          var noneActive = Object.values(riskActive).every(function (v) { return !v; });
+          document.getElementById("toggle-all").textContent = noneActive ? "Show All" : "Hide All";
+        });
+      });
+
+      document.getElementById("toggle-all").addEventListener("click", function () {
+        var allActive = Object.values(riskActive).every(Boolean);
+        var nextState = !allActive;
+        document.querySelectorAll(".legend-toggle").forEach(function (el) {
+          var risk = el.getAttribute("data-risk");
+          riskActive[risk] = nextState;
+          if (nextState) {
+            map.addLayer(riskLayers[risk]);
+            el.style.opacity = "1";
+            el.querySelector("span").style.textDecoration = "none";
+          } else {
+            map.removeLayer(riskLayers[risk]);
+            el.style.opacity = "0.35";
+            el.querySelector("span").style.textDecoration = "line-through";
+          }
+        });
+        this.textContent = nextState ? "Hide All" : "Show All";
+      });
+
+      // ── Plot accident points (zoom ≥ 15) ───────────────────────────────────────
+      // Plot accidents (visible when zoomed in)
       accidents.forEach(function (acc) {
           var severityColors = {
               Fatal: "#e74c3c",
               Serious: "#f39c12",
               Slight: "#3498db",
           };
-          L.circleMarker([acc.latitude, acc.longitude], {
-              radius: 4,
+          var marker = L.circleMarker([acc.latitude, acc.longitude], {
+              radius: acc.severity === "Fatal" ? 7 : acc.severity === "Serious" ? 5 : 3,
               fillColor: severityColors[acc.severity] || "#999",
               color: "#fff",
               weight: 1,
               opacity: 0.8,
               fillOpacity: 0.7,
           }).addTo(accidentLayer);
+
+          var popup = "<div style='min-width:200px'>" +
+            "<span style='display:inline-block;padding:2px 8px;border-radius:4px;color:#fff;font-size:11px;background:" +
+            (severityColors[acc.severity] || "#999") + "'>" + acc.severity + "</span>" +
+            "<h4 style='margin:8px 0 4px 0;font-size:14px'>" + (acc.accident_type || "Accident") + "</h4>" +
+            "<p style='margin:0 0 6px 0;font-size:12px;color:#555'>" + (acc.description || "") + "</p>" +
+            "<div style='font-size:11px;color:#888'>" +
+            (acc.vehicle_type ? "<b>Vehicle:</b> " + acc.vehicle_type + "<br>" : "") +
+            "<b>Casualties:</b> " + acc.number_of_casualties +
+            (acc.number_of_deaths > 0 ? " (" + acc.number_of_deaths + " dead)" : " (injuries only)") + "<br>" +
+            "<b>Vehicles Involved:</b> " + acc.number_of_vehicles + "<br>" +
+            "<b>Location:</b> " + (acc.location_name || "Unknown") + "<br>" +
+            "<b>Date:</b> " + acc.date +
+            (acc.source_url ? "<br><a href='" + acc.source_url + "' target='_blank' style='color:#3498db'>Source Article →</a>" : "") +
+            "</div></div>";
+
+          marker.bindPopup(popup);
       });
 
-      // Show/hide accident points based on zoom level
       map.on("zoomend", function () {
-          if (map.getZoom() >= 15) {
-              map.addLayer(accidentLayer);
-          } else {
-              map.removeLayer(accidentLayer);
-          }
+        if (map.getZoom() >= 15) {
+          map.addLayer(accidentLayer);
+        } else {
+          map.removeLayer(accidentLayer);
+        }
+      });
+
+      // ── Click to predict ───────────────────────────────────────────────────────
+      var clickedLat, clickedLon;
+
+      map.on("click", function (e) {
+        clickedLat = e.latlng.lat.toFixed(6);
+        clickedLon = e.latlng.lng.toFixed(6);
+
+        document.getElementById("clicked-lat").textContent = clickedLat;
+        document.getElementById("clicked-lon").textContent = clickedLon;
+        document.getElementById("prediction-panel").style.display = "block";
+        document.getElementById("click-prompt").style.display   = "none";
+
+        var resultEl = document.getElementById("prediction-result");
+        resultEl.style.display   = "none";
+        resultEl.style.opacity   = "0";
+        resultEl.style.transform = "translateY(8px)";
+
+        if (predictionMarker) map.removeLayer(predictionMarker);
+        predictionMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+      });
+
+      // ── Clear pin button ───────────────────────────────────────────────────────
+      document.getElementById("btn-clear-pin").addEventListener("click", function () {
+        if (predictionMarker) {
+          map.removeLayer(predictionMarker);
+          predictionMarker = null;
+        }
+        document.getElementById("prediction-panel").style.display = "none";
+        document.getElementById("click-prompt").style.display     = "block";
+        var resultEl = document.getElementById("prediction-result");
+        resultEl.style.display   = "none";
+        resultEl.style.opacity   = "0";
+        resultEl.style.transform = "translateY(8px)";
+      });
+
+      // ── Predict button ─────────────────────────────────────────────────────────
+      document.getElementById("btn-predict").addEventListener("click", function () {
+        var btn     = this;
+        var label   = document.getElementById("btn-label");
+        var spinner = document.getElementById("btn-spinner");
+
+        label.textContent       = "Predicting…";
+        spinner.style.display   = "inline-block";
+        btn.disabled            = true;
+        btn.style.opacity       = ".75";
+
+        var params = new URLSearchParams({
+          lat:     clickedLat,
+          lon:     clickedLon,
+          day:     document.getElementById("sel-day").value,
+          time:    document.getElementById("sel-time").value,
+          weather: document.getElementById("sel-weather").value,
+          road:    document.getElementById("sel-road").value,
+          speed:   document.getElementById("sel-speed").value,
+          light:   document.getElementById("sel-light").value,
+        });
+
+        fetch("/api/predict/?" + params.toString())
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            _resetBtn(btn, label, spinner);
+
+            if (data.status === "success") {
+              // Risk badge + coloured card
+              var badge = document.getElementById("risk-badge");
+              badge.textContent = data.prediction;
+
+              var card = document.getElementById("result-card");
+              card.style.background = riskGradients[data.prediction] || "linear-gradient(135deg,#6b7280,#374151)";
+
+              // Step-by-step decision path
+              var steps     = data.decision_path.split(" → ");
+              var container = document.getElementById("decision-path");
+              container.innerHTML = "";
+
+              steps.forEach(function (step, i) {
+                var isLast = (i === steps.length - 1);
+                var wrapper = document.createElement("div");
+
+                var stepBox = document.createElement("div");
+                stepBox.textContent = step;
+                if (isLast) {
+                  stepBox.style.cssText = [
+                    "background:" + (riskColors[data.prediction] || "#555"),
+                    "color:#fff",
+                    "border-radius:8px",
+                    "padding:7px 11px",
+                    "font-size:12px",
+                    "font-weight:800",
+                    "line-height:1.4",
+                  ].join(";");
+                } else {
+                  stepBox.style.cssText = [
+                    "background:#f8fafc",
+                    "border:1px solid #e2e8f0",
+                    "border-radius:8px",
+                    "padding:7px 11px",
+                    "font-size:12px",
+                    "color:#475569",
+                    "line-height:1.4",
+                  ].join(";");
+                }
+                wrapper.appendChild(stepBox);
+
+                if (!isLast) {
+                  var arrow = document.createElement("div");
+                  arrow.textContent = "↓";
+                  arrow.style.cssText = "text-align:center;color:#cbd5e1;font-size:15px;line-height:1.6;";
+                  wrapper.appendChild(arrow);
+                }
+                container.appendChild(wrapper);
+              });
+
+              // Fade-in reveal
+              var resultEl = document.getElementById("prediction-result");
+              resultEl.style.display   = "block";
+              resultEl.style.opacity   = "0";
+              resultEl.style.transform = "translateY(8px)";
+              requestAnimationFrame(function () {
+                requestAnimationFrame(function () {
+                  resultEl.style.opacity   = "1";
+                  resultEl.style.transform = "translateY(0)";
+                });
+              });
+
+              // Coloured prediction marker
+              if (predictionMarker) map.removeLayer(predictionMarker);
+              var color = riskColors[data.prediction] || "#999";
+              predictionMarker = L.circleMarker(
+                [parseFloat(clickedLat), parseFloat(clickedLon)],
+                { radius: 12, fillColor: color, color: "#fff", weight: 3, fillOpacity: 0.9 }
+              ).addTo(map);
+            }
+          })
+          .catch(function () { _resetBtn(btn, label, spinner); });
+      });
+
+      function _resetBtn(btn, label, spinner) {
+        label.textContent     = "Predict Risk";
+        spinner.style.display = "none";
+        btn.disabled          = false;
+        btn.style.opacity     = "1";
+      }
+
+      // ── Mobile sidebar toggle ──────────────────────────────────────────────────
+      function openSidebar() {
+        document.getElementById("sidebar").classList.add("sidebar-open");
+        document.getElementById("sidebar-backdrop").classList.add("backdrop-open");
+      }
+      function closeSidebar() {
+        document.getElementById("sidebar").classList.remove("sidebar-open");
+        document.getElementById("sidebar-backdrop").classList.remove("backdrop-open");
+      }
+      document.getElementById("sidebar-toggle").addEventListener("click", openSidebar);
+      document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
+      document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
+
+      // Close sidebar when user clicks the map on mobile
+      map.on("click", function () {
+        if (window.innerWidth < 768) closeSidebar();
       });
     </script>
   </body>

@@ -16,10 +16,21 @@ class AccidentRecord(models.Model):
     severity = models.CharField(max_length=20)
     number_of_vehicles = models.IntegerField(default=1)
     number_of_casualties = models.IntegerField(default=0)
+    number_of_deaths = models.IntegerField(default=0)
     source = models.CharField(
         max_length=20,
-        choices=[("UK_STATS19", "UK STATS19"), ("KTM_SYNTHETIC", "Kathmandu Synthetic")],
+        choices=[
+            ("UK_STATS19", "UK STATS19"),
+            ("KTM_SYNTHETIC", "Kathmandu Synthetic"),
+            ("KTM_SCRAPED", "Kathmandu Scraped"),
+        ],
     )
+    # New fields
+    vehicle_type = models.CharField(max_length=50, null=True, blank=True)
+    accident_type = models.CharField(max_length=100, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    source_url = models.URLField(null=True, blank=True)
+    location_name = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return f"{self.severity} accident at ({self.latitude}, {self.longitude}) on {self.date}"
@@ -55,9 +66,7 @@ class HotspotCluster(models.Model):
 
 class DataUpload(models.Model):
     filename = models.CharField(max_length=255)
-    uploaded_by = models.ForeignKey(
-        "auth.User", on_delete=models.SET_NULL, null=True
-    )
+    uploaded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True)
     upload_date = models.DateTimeField(auto_now_add=True)
     record_count = models.IntegerField(default=0)
     status = models.CharField(

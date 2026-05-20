@@ -10,7 +10,7 @@ from predictions.dbscan import dbscan
 
 # Load points with full data
 accidents = list(
-    AccidentRecord.objects.filter(source="UK_STATS19").values(
+    AccidentRecord.objects.filter(source="KTM_SYNTHETIC").values(
         "id", "latitude", "longitude", "severity", "weather_condition",
         "day_of_week", "time"
     )

@@ -1,0 +1,30 @@
+# pgAdmin 4 — connects to PostgreSQL running on the host machine
+# Usage:
+#   docker compose -f docker-compose.pgadmin.yml up -d
+#   Open http://localhost:5050
+#   Login: admin@admin.com / admin
+#
+# When adding a server in pgAdmin:
+#   Host:     host.docker.internal   (this resolves to your host machine)
+#   Port:     5432                   (or whatever port your PG is on)
+#   Username: <your postgres user>
+#   Password: <your postgres password>
+#   Database: <your django DB name>
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  pgadmin_data:

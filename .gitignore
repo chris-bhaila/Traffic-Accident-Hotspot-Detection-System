@@ -17,7 +17,6 @@ media/
 *.env
 
 # ML / Data
-predictions/trained_tree.pkl
 scripts/scraped_preview.json
 
 # OS

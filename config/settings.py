@@ -77,7 +77,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.contrib.gis.db.backends.postgis",
+        "ENGINE": "django.db.backends.postgresql",
         "NAME": "hotspot_db",
         "USER": "hotspot_user",
         "PASSWORD": "38251009",

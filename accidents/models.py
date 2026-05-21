@@ -1,10 +1,9 @@
-from django.contrib.gis.db import models
+from django.db import models
 
 
 class AccidentRecord(models.Model):
     latitude = models.FloatField()
     longitude = models.FloatField()
-    location = models.PointField(null=True, blank=True)
     date = models.DateField()
     time = models.TimeField(null=True, blank=True)
     day_of_week = models.CharField(max_length=20)
@@ -42,7 +41,6 @@ class AccidentRecord(models.Model):
 class HotspotCluster(models.Model):
     centroid_latitude = models.FloatField()
     centroid_longitude = models.FloatField()
-    centroid_location = models.PointField(null=True, blank=True)
     accident_count = models.IntegerField()
     radius = models.FloatField()
     average_severity = models.FloatField()

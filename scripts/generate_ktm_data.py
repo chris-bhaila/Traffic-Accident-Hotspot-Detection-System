@@ -1,8 +1,14 @@
+import sys
 import os
 import django
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
+
+from django.conf import settings as _django_settings
+_db = _django_settings.DATABASES["default"]
+print(f"[DB] host={_db.get('HOST', '?')} name={_db.get('NAME', '?')}")
 
 import numpy as np
 import random
@@ -441,3 +447,9 @@ def print_summary(records):
     for h in sorted(hours.keys()):
         bar = "#" * (hours[h] // 5)
         print(f"  {h:02d}:00  {hours[h]:>4}  {bar}")
+
+
+if __name__ == "__main__":
+    records = generate_accidents(n_records=2000)
+    print_summary(records)
+    save_records(records)

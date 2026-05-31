@@ -610,6 +610,7 @@
     </button>
 
     <!-- ═══ SCRIPTS ═══════════════════════════════════════════════════════════════ -->
+    {{ accidents|json_script:"accidents-data" }}
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
       // ── Map setup ──────────────────────────────────────────────────────────────
@@ -619,8 +620,9 @@
         zoomDelta: 0.5,
       }).setView([27.7000, 85.3300], 13);
 
-      var lightTile = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+      var lightTile = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        subdomains: "abcd",
         maxZoom: 19,
       });
 
@@ -676,7 +678,7 @@
 
       // ── Data ───────────────────────────────────────────────────────────────────
       var clusters  = {{ clusters_json|safe }};
-      var accidents = {{ accidents_json|safe }};
+      var accidents = JSON.parse(document.getElementById("accidents-data").textContent);
 
       var riskLayers = {
         CRITICAL: L.layerGroup().addTo(map),
@@ -825,13 +827,7 @@
           marker.bindPopup(popup);
       });
 
-      map.on("zoomend", function () {
-        if (map.getZoom() >= 15) {
-          map.addLayer(accidentLayer);
-        } else {
-          map.removeLayer(accidentLayer);
-        }
-      });
+      accidentLayer.addTo(map);
 
       // ── Click to predict ───────────────────────────────────────────────────────
       var clickedLat, clickedLon;

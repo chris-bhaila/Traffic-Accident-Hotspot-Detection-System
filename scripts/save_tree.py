@@ -6,6 +6,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
+from django.conf import settings as _django_settings
+_db = _django_settings.DATABASES["default"]
+print(f"[DB] host={_db.get('HOST', '?')} name={_db.get('NAME', '?')}")
+
 import pandas as pd
 import numpy as np
 import pickle

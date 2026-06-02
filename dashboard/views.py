@@ -22,13 +22,8 @@ def map_view(request):
     )
 
     # Load accident points
-    qs = AccidentRecord.objects.filter(source__in=["KTM_SYNTHETIC", "KTM_SCRAPED"])
-    print("DEBUG accident SQL:", qs.query)
-    print("DEBUG accident count:", qs.count())
-    print("DEBUG all distinct sources:", list(AccidentRecord.objects.values_list("source", flat=True).distinct()))
-
     accidents = list(
-        qs.values(
+        AccidentRecord.objects.filter(source="UK_STATS19").values(
             "latitude",
             "longitude",
             "severity",

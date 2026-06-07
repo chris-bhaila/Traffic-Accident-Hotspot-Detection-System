@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analytics — Traffic Hotspot Prediction System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      #sidebar::-webkit-scrollbar { width: 4px; }
+      #sidebar::-webkit-scrollbar-track { background: transparent; }
+      #sidebar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+
+      @media (max-width: 767px) {
+        #main-content { margin-left: 0 !important; }
+        #sidebar {
+          width: min(320px, 85vw);
+          transform: translateX(-100%);
+          transition: transform 0.28s ease;
+          z-index: 55;
+        }
+        #sidebar.sidebar-open { transform: translateX(0); }
+        #sidebar-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          z-index: 50;
+        }
+        #sidebar-backdrop.backdrop-open { display: block; }
+      }
+    </style>
+  </head>
+  <body
+    class="bg-gray-50"
+    style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;"
+  >
+
+    <!-- ═══ NAVBAR ═══════════════════════════════════════════════════════════════ -->
+    <nav
+      class="fixed top-0 left-0 right-0 h-14 z-50 flex items-center px-5 gap-4"
+      style="background: #0f172a; box-shadow: 0 2px 12px rgba(0,0,0,0.3)"
+    >
+      <!-- Hamburger (mobile only) -->
+      <button
+        id="sidebar-toggle"
+        class="md:hidden flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
+        style="color:#94a3b8; background:rgba(255,255,255,0.08);"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <div class="flex items-center gap-2.5 flex-1 min-w-0">
+        <div
+          class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style="background: linear-gradient(135deg, #f97316, #ef4444)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <span class="text-white font-semibold text-sm tracking-tight truncate">Traffic Hotspot Prediction</span>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <a
+          href="/"
+          class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          onmouseover="this.style.background='rgba(255,255,255,0.08)'"
+          onmouseout="this.style.background='transparent'"
+        >Map</a>
+        <a
+          href="#"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+          style="background: rgba(255,255,255,0.12)"
+        >Analytics</a>
+        <a
+          href="/admin/"
+          class="hidden md:block px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          onmouseover="this.style.background='rgba(255,255,255,0.08)'"
+          onmouseout="this.style.background='transparent'"
+        >Admin</a>
+      </div>
+    </nav>
+
+    <!-- Mobile backdrop -->
+    <div id="sidebar-backdrop"></div>
+
+    <!-- ═══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+    <div
+      id="sidebar"
+      class="fixed top-14 left-0 w-80 bg-white overflow-y-auto z-40"
+      style="height: calc(100vh - 3.5rem); box-shadow: 4px 0 24px rgba(0,0,0,0.07);"
+    >
+      <!-- Mobile close bar -->
+      <div class="md:hidden flex items-center justify-between px-5 py-3 border-b border-slate-100">
+        <span class="text-sm font-semibold text-slate-700">Menu</span>
+        <button id="sidebar-close" class="flex items-center justify-center w-7 h-7 rounded-lg text-slate-400" style="background:#f1f5f9;">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-5 flex flex-col gap-5">
+
+        <!-- Overview ─────────────────────────────────────────────────────────── -->
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Overview</p>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ total }}</div>
+              <div class="text-xs text-slate-400 mt-1">Accidents</div>
+            </div>
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ total_clusters }}</div>
+              <div class="text-xs text-slate-400 mt-1">Hotspots</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Severity breakdown ───────────────────────────────────────────────── -->
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Severity</p>
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#e74c3c;"></div>
+                <span class="text-xs font-medium text-slate-600">Fatal</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ fatal_count }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#f39c12;"></div>
+                <span class="text-xs font-medium text-slate-600">Serious</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ serious_count }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:#3498db;"></div>
+                <span class="text-xs font-medium text-slate-600">Slight</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ slight_count }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- Risk levels ──────────────────────────────────────────────────────── -->
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Cluster Risk Levels</p>
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#e74c3c;"></div>
+                <span class="text-xs font-medium text-slate-600">Critical</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ risk_breakdown.CRITICAL }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#f39c12;"></div>
+                <span class="text-xs font-medium text-slate-600">High</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ risk_breakdown.HIGH }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#f1c40f;"></div>
+                <span class="text-xs font-medium text-slate-600">Medium</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ risk_breakdown.MEDIUM }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#3498db;"></div>
+                <span class="text-xs font-medium text-slate-600">Low</span>
+              </div>
+              <span class="text-xs font-bold text-slate-700">{{ risk_breakdown.LOW }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100"></div>
+
+        <!-- Navigation ───────────────────────────────────────────────────────── -->
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Navigation</p>
+          <a
+            href="/"
+            class="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:border-slate-300 transition-colors"
+            style="background:#f8fafc;"
+            onmouseover="this.style.background='#f1f5f9'"
+            onmouseout="this.style.background='#f8fafc'"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+            </svg>
+            View Hotspot Map
+          </a>
+        </div>
+
+        <!-- Dataset note ─────────────────────────────────────────────────────── -->
+        <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc;">
+          <p class="text-xs font-semibold text-slate-500 mb-1">Dataset</p>
+          <p class="text-xs text-slate-400 leading-relaxed">UK STATS19 — Leeds District. Real government road accident statistics. Clustering and decision tree trained on this dataset.</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ MAIN CONTENT ═════════════════════════════════════════════════════════ -->
+    <div id="main-content" class="pt-14" style="margin-left: 20rem;">
+      <div class="p-6">
+
+        <!-- Page header -->
+        <div class="mb-6">
+          <h1 class="text-xl font-bold text-slate-800">Analytics Dashboard</h1>
+          <p class="text-sm text-slate-500 mt-1">
+            UK STATS19 — Leeds District &middot; {{ total }} records &middot; {{ total_clusters }} hotspot clusters
+          </p>
+        </div>
+
+        <!-- ── Row 1: Summary stat cards ─────────────────────────────────────── -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+
+          <!-- Total Accidents -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(59,130,246,0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" style="color:#3b82f6;width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="text-3xl font-black text-slate-800 leading-none">{{ total }}</div>
+            <div class="text-xs text-slate-400 mt-1.5 font-medium">Total Accidents</div>
+          </div>
+
+          <!-- Fatal Accidents -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(239,68,68,0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" style="color:#ef4444;width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="text-3xl font-black leading-none" style="color:#e74c3c;">{{ fatal_count }}</div>
+            <div class="text-xs text-slate-400 mt-1.5 font-medium">Fatal Accidents</div>
+          </div>
+
+          <!-- Total Clusters -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(249,115,22,0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" style="color:#f97316;width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="text-3xl font-black text-slate-800 leading-none">{{ total_clusters }}</div>
+            <div class="text-xs text-slate-400 mt-1.5 font-medium">Hotspot Clusters</div>
+          </div>
+
+          <!-- Most Dangerous Hour -->
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:rgba(139,92,246,0.1);">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4.5 h-4.5" style="color:#8b5cf6;width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="text-xl font-black text-slate-800 leading-none">{{ most_dangerous_hour_label }}</div>
+            <div class="text-xs text-slate-400 mt-1.5 font-medium">Peak Accident Hour</div>
+          </div>
+
+        </div>
+
+        <!-- ── Row 2: Hourly + Day of Week ───────────────────────────────────── -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-700 mb-1">Accidents by Hour of Day</h3>
+            <p class="text-xs text-slate-400 mb-4">
+              <span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Rush hours (07–09, 16–19)
+              <span style="display:inline-block;width:10px;height:10px;background:#93c5fd;border-radius:2px;margin-right:4px;margin-left:10px;vertical-align:middle;"></span>Other hours
+            </p>
+            <div style="height:220px;position:relative;">
+              <canvas id="chart-hourly"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-700 mb-4">Accidents by Day of Week</h3>
+            <div style="height:220px;position:relative;">
+              <canvas id="chart-day"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── Row 3: Severity Donut + Weather ───────────────────────────────── -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-700 mb-4">Severity Distribution</h3>
+            <div style="height:220px;position:relative;">
+              <canvas id="chart-severity"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-700 mb-4">Weather Condition Breakdown</h3>
+            <div style="height:220px;position:relative;">
+              <canvas id="chart-weather"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── Row 4: Road Type vs Severity (stacked bar) ────────────────────── -->
+        <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm mb-4">
+          <h3 class="text-sm font-semibold text-slate-700 mb-1">Road Type vs Severity</h3>
+          <p class="text-xs text-slate-400 mb-4">Accident count per road type, stacked by severity</p>
+          <div style="height:240px;position:relative;">
+            <canvas id="chart-road-severity"></canvas>
+          </div>
+        </div>
+
+        <!-- ── Row 5: Top 10 Hotspot Clusters (horizontal bar) ───────────────── -->
+        <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm mb-6">
+          <h3 class="text-sm font-semibold text-slate-700 mb-1">Top 10 Hotspot Clusters</h3>
+          <p class="text-xs text-slate-400 mb-4">Ranked by accident count, coloured by risk level</p>
+          <div style="height:300px;position:relative;">
+            <canvas id="chart-top-clusters"></canvas>
+          </div>
+        </div>
+
+        <!-- ── Row 6: Model Performance ──────────────────────────────────────── -->
+        {% if tree_eval %}
+        <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm mb-6">
+
+          <!-- Header -->
+          <div class="flex items-start justify-between mb-5">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-700">Decision Tree Model Performance</h3>
+              <p class="text-xs text-slate-400 mt-0.5">
+                ID3 classifier &middot; 80/20 stratified split &middot;
+                {{ tree_eval.train_size }} train / {{ tree_eval.test_size }} test &middot;
+                evaluated {{ tree_eval.evaluated_at|date:"d M Y, H:i" }}
+              </p>
+            </div>
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-lg" style="background:rgba(59,130,246,0.08);color:#3b82f6;">
+              ID3 · max_depth=6
+            </span>
+          </div>
+
+          <!-- Summary cards -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc;">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ tree_eval.accuracy_pct }}%</div>
+              <div class="text-xs text-slate-400 mt-1.5">Overall Accuracy</div>
+            </div>
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc;">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ tree_eval.f1_macro_pct }}%</div>
+              <div class="text-xs text-slate-400 mt-1.5">Macro F1 Score</div>
+            </div>
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc;">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ tree_eval.train_size }}</div>
+              <div class="text-xs text-slate-400 mt-1.5">Training Samples</div>
+            </div>
+            <div class="rounded-xl p-3.5 border border-slate-100" style="background:#f8fafc;">
+              <div class="text-2xl font-black text-slate-800 leading-none">{{ tree_eval.test_size }}</div>
+              <div class="text-xs text-slate-400 mt-1.5">Test Samples</div>
+            </div>
+          </div>
+
+          <!-- Confusion matrix + per-class table side by side -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Confusion matrix -->
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Confusion Matrix</p>
+              <p class="text-xs text-slate-400 mb-4">Rows&nbsp;=&nbsp;Actual &nbsp;&middot;&nbsp; Columns&nbsp;=&nbsp;Predicted</p>
+              <table class="text-sm" style="border-collapse:separate;border-spacing:5px;">
+                <thead>
+                  <tr>
+                    <th class="pb-1 pr-2 text-right text-xs font-medium text-slate-400"></th>
+                    {% for cls in tree_eval.classes %}
+                    <th class="pb-1 text-center text-xs font-semibold text-slate-600" style="min-width:70px;">{{ cls }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in tree_eval.cm_rows %}
+                  <tr>
+                    <td class="pr-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{{ row.actual }}</td>
+                    {% for cell in row.cells %}
+                    <td class="text-center font-bold text-sm rounded-lg" style="padding:10px 14px;background:{{ cell.bg }};color:{{ cell.text_color }};">
+                      {{ cell.count }}
+                    </td>
+                    {% endfor %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              <p class="text-xs text-slate-400 mt-3">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(34,197,94,0.55);margin-right:4px;vertical-align:middle;"></span>Correct &nbsp;
+                <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(239,68,68,0.4);margin-right:4px;margin-left:8px;vertical-align:middle;"></span>Misclassified
+              </p>
+            </div>
+
+            <!-- Per-class metrics table -->
+            <div>
+              <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Per-Class Metrics</p>
+              <p class="text-xs text-slate-400 mb-4">Precision, recall, F1 for each severity class</p>
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-slate-100">
+                    <th class="py-2 text-left text-slate-400 font-medium">Class</th>
+                    <th class="py-2 text-right text-slate-400 font-medium">Precision</th>
+                    <th class="py-2 text-right text-slate-400 font-medium">Recall</th>
+                    <th class="py-2 text-right text-slate-400 font-medium">F1</th>
+                    <th class="py-2 text-right text-slate-400 font-medium">Support</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for m in tree_eval.per_class %}
+                  <tr class="border-b border-slate-50">
+                    <td class="py-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:{{ m.color }};"></div>
+                        <span class="font-semibold text-slate-700">{{ m.name }}</span>
+                      </div>
+                    </td>
+                    <td class="py-3 text-right text-slate-600">{{ m.precision_pct }}%</td>
+                    <td class="py-3 text-right text-slate-600">{{ m.recall_pct }}%</td>
+                    <td class="py-3 text-right font-bold text-slate-800">{{ m.f1_pct }}%</td>
+                    <td class="py-3 text-right text-slate-400">{{ m.support }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr class="border-t border-slate-200">
+                    <td class="pt-3 text-xs font-semibold text-slate-500" colspan="3">Macro F1</td>
+                    <td class="pt-3 text-right font-black text-slate-800">{{ tree_eval.f1_macro_pct }}%</td>
+                    <td class="pt-3 text-right text-slate-400">{{ tree_eval.test_size }}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+          </div>
+        </div>
+        {% else %}
+        <div class="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm mb-6">
+          <h3 class="text-sm font-semibold text-slate-700 mb-2">Decision Tree Model Performance</h3>
+          <p class="text-xs text-slate-400">
+            No evaluation results yet. Run
+            <code class="px-1.5 py-0.5 rounded text-slate-600" style="background:#f1f5f9;font-size:11px;">python scripts/evaluate_tree.py</code>
+            from the project root to generate them.
+          </p>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    <!-- ═══ CHART DATA & SCRIPTS ══════════════════════════════════════════════════ -->
+    {{ chart_data|json_script:"chart-data" }}
+    <script>
+      // ── Parse data ─────────────────────────────────────────────────────────────
+      const d = JSON.parse(document.getElementById("chart-data").textContent);
+
+      // ── Chart.js global defaults ───────────────────────────────────────────────
+      Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      Chart.defaults.font.size = 11;
+      Chart.defaults.color = '#64748b';
+
+      const RISK_COLORS = {
+        CRITICAL: '#e74c3c',
+        HIGH:     '#f39c12',
+        MEDIUM:   '#f1c40f',
+        LOW:      '#3498db',
+      };
+
+      // ── 1. Accidents by Hour ───────────────────────────────────────────────────
+      new Chart(document.getElementById("chart-hourly"), {
+        type: 'bar',
+        data: {
+          labels: Array.from({length: 24}, (_, i) => String(i).padStart(2, '0') + ':00'),
+          datasets: [{
+            data: d.hours,
+            backgroundColor: d.hours.map((_, i) =>
+              (i >= 7 && i <= 9) || (i >= 16 && i <= 19) ? '#f97316' : '#93c5fd'
+            ),
+            borderRadius: 3,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { label: ctx => ' ' + ctx.parsed.y + ' accidents' }
+          }},
+          scales: {
+            x: { grid: { display: false }, ticks: { maxRotation: 0, font: { size: 10 } } },
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+          },
+        },
+      });
+
+      // ── 2. Accidents by Day of Week ────────────────────────────────────────────
+      new Chart(document.getElementById("chart-day"), {
+        type: 'bar',
+        data: {
+          labels: d.day_labels.map(l => l.slice(0, 3)),
+          datasets: [{
+            data: d.day_counts,
+            backgroundColor: '#818cf8',
+            borderRadius: 4,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { title: ctx => d.day_labels[ctx[0].dataIndex], label: ctx => ' ' + ctx.parsed.y + ' accidents' }
+          }},
+          scales: {
+            x: { grid: { display: false } },
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+          },
+        },
+      });
+
+      // ── 3. Severity Distribution (donut) ──────────────────────────────────────
+      new Chart(document.getElementById("chart-severity"), {
+        type: 'doughnut',
+        data: {
+          labels: d.severity_labels,
+          datasets: [{
+            data: d.severity_values,
+            backgroundColor: ['#e74c3c', '#f39c12', '#3498db'],
+            borderWidth: 2,
+            borderColor: '#fff',
+            hoverOffset: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 8 } },
+            tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + ctx.parsed + ' accidents' } },
+          },
+        },
+      });
+
+      // ── 4. Weather Condition ───────────────────────────────────────────────────
+      new Chart(document.getElementById("chart-weather"), {
+        type: 'bar',
+        data: {
+          labels: d.weather_labels,
+          datasets: [{
+            data: d.weather_values,
+            backgroundColor: '#34d399',
+            borderRadius: 4,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: {
+            callbacks: { label: ctx => ' ' + ctx.parsed.y + ' accidents' }
+          }},
+          scales: {
+            x: { grid: { display: false }, ticks: {
+              maxRotation: 45, minRotation: 30,
+              callback: function(value, index) {
+                const label = d.weather_labels[index] || '';
+                return label.length > 14 ? label.slice(0, 14) + '…' : label;
+              },
+            }},
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+          },
+        },
+      });
+
+      // ── 5. Road Type vs Severity (stacked bar) ────────────────────────────────
+      new Chart(document.getElementById("chart-road-severity"), {
+        type: 'bar',
+        data: {
+          labels: d.road_labels,
+          datasets: [
+            { label: 'Fatal',   data: d.road_sev_fatal,   backgroundColor: '#e74c3c', stack: 'sev', borderRadius: 0 },
+            { label: 'Serious', data: d.road_sev_serious, backgroundColor: '#f39c12', stack: 'sev', borderRadius: 0 },
+            { label: 'Slight',  data: d.road_sev_slight,  backgroundColor: '#3498db', stack: 'sev', borderRadius: 0 },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyleWidth: 8 } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const i = ctx.dataIndex;
+                  const total = d.road_sev_fatal[i] + d.road_sev_serious[i] + d.road_sev_slight[i];
+                  const raw = ctx.dataset.label === 'Fatal'   ? d.road_sev_fatal[i]
+                            : ctx.dataset.label === 'Serious' ? d.road_sev_serious[i]
+                            : d.road_sev_slight[i];
+                  const pct = total > 0 ? (raw / total * 100).toFixed(1) : '0.0';
+                  return ' ' + ctx.dataset.label + ': ' + pct + '% (' + raw + ' accidents)';
+                },
+              },
+            },
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: {
+              maxRotation: 30, minRotation: 0,
+              callback: function(value, index) {
+                const label = d.road_labels[index] || '';
+                return label.length > 18 ? label.slice(0, 18) + '…' : label;
+              },
+            }},
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              max: 100,
+              grid: { color: '#f1f5f9' },
+              ticks: { callback: function(v) { return v + '%'; } },
+            },
+          },
+        },
+        plugins: [{
+          id: 'normalise',
+          beforeUpdate: function(chart) {
+            const n = d.road_labels.length;
+            for (let i = 0; i < n; i++) {
+              const total = d.road_sev_fatal[i] + d.road_sev_serious[i] + d.road_sev_slight[i];
+              chart.data.datasets[0].data[i] = total > 0 ? d.road_sev_fatal[i]   / total * 100 : 0;
+              chart.data.datasets[1].data[i] = total > 0 ? d.road_sev_serious[i] / total * 100 : 0;
+              chart.data.datasets[2].data[i] = total > 0 ? d.road_sev_slight[i]  / total * 100 : 0;
+            }
+          },
+        }],
+      });
+
+      // ── 6. Top 10 Hotspot Clusters (horizontal bar) ───────────────────────────
+      const clusterLabels = d.top_clusters.map(function(c, i) {
+        return 'Cluster ' + (i + 1) + ' · ' + c.accident_count + ' accidents';
+      });
+      const clusterCounts = d.top_clusters.map(function(c) { return c.accident_count; });
+      const clusterColors = d.top_clusters.map(function(c) { return RISK_COLORS[c.risk_level] || '#94a3b8'; });
+      const clusterTooltips = d.top_clusters.map(function(c) {
+        return c.risk_level + ' · Peak: ' + (c.peak_day || '—') + ' ' + (c.peak_time || '');
+      });
+
+      new Chart(document.getElementById("chart-top-clusters"), {
+        type: 'bar',
+        data: {
+          labels: clusterLabels,
+          datasets: [{
+            data: clusterCounts,
+            backgroundColor: clusterColors,
+            borderRadius: 4,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) { return ' ' + ctx.parsed.x + ' accidents'; },
+                afterLabel: function(ctx) { return ' ' + clusterTooltips[ctx.dataIndex]; },
+              },
+            },
+          },
+          scales: {
+            x: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+            y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          },
+        },
+      });
+
+      // ── Mobile sidebar toggle ──────────────────────────────────────────────────
+      function openSidebar() {
+        document.getElementById("sidebar").classList.add("sidebar-open");
+        document.getElementById("sidebar-backdrop").classList.add("backdrop-open");
+      }
+      function closeSidebar() {
+        document.getElementById("sidebar").classList.remove("sidebar-open");
+        document.getElementById("sidebar-backdrop").classList.remove("backdrop-open");
+      }
+      document.getElementById("sidebar-toggle").addEventListener("click", openSidebar);
+      document.getElementById("sidebar-close").addEventListener("click", closeSidebar);
+      document.getElementById("sidebar-backdrop").addEventListener("click", closeSidebar);
+    </script>
+  </body>
+</html>

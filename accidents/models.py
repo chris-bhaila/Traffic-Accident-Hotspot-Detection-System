@@ -62,6 +62,22 @@ class HotspotCluster(models.Model):
         return f"{self.risk_level} cluster at ({self.centroid_latitude}, {self.centroid_longitude})"
 
 
+class TreeEvaluation(models.Model):
+    evaluated_at = models.DateTimeField(auto_now_add=True)
+    accuracy = models.FloatField()
+    f1_macro = models.FloatField()
+    confusion_matrix_json = models.TextField()
+    per_class_metrics_json = models.TextField()
+    train_size = models.IntegerField()
+    test_size = models.IntegerField()
+
+    def __str__(self):
+        return f"TreeEvaluation {self.evaluated_at:%Y-%m-%d %H:%M} (acc={self.accuracy:.3f})"
+
+    class Meta:
+        ordering = ["-evaluated_at"]
+
+
 class DataUpload(models.Model):
     filename = models.CharField(max_length=255)
     uploaded_by = models.ForeignKey("auth.User", on_delete=models.SET_NULL, null=True)

@@ -250,14 +250,10 @@
             >Heatmap</button>
             <button
               id="mode-btn-route"
-              disabled
-              class="flex-1 rounded-lg py-2"
-              style="background:transparent;cursor:not-allowed;"
-              title="Coming Soon"
-            >
-              <span class="block text-xs font-semibold" style="color:#cbd5e1;">Route</span>
-              <span class="block" style="font-size:9px;font-weight:500;color:#d1d5db;margin-top:1px;">soon</span>
-            </button>
+              onclick="setMode('route')"
+              class="flex-1 text-xs font-semibold py-2 rounded-lg transition-all"
+              style="background:transparent;color:#64748b;"
+            >Route</button>
           </div>
           <p
             id="mode-hint-heatmap"
@@ -267,7 +263,7 @@
         </div>
 
         <!-- Legend ─────────────────────────────────────────────────────────────── -->
-        <div>
+        <div id="legend-section">
           <div class="flex items-center justify-between mb-3">
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">
               Risk Levels
@@ -332,7 +328,7 @@
           </div>
         </div>
 
-        <div class="border-t border-slate-100"></div>
+        <div id="sidebar-divider" class="border-t border-slate-100"></div>
 
         <!-- Click prompt ──────────────────────────────────────────────────────── -->
         <div id="click-prompt" class="text-center py-4">
@@ -609,6 +605,81 @@
             </div>
           </div>
         </div>
+
+        <!-- Route Panel ─────────────────────────────────────────────────────────── -->
+        <div id="route-panel" style="display:none;" class="flex flex-col gap-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Route Analysis</p>
+
+          <!-- Origin -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1.5">
+              <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-xs font-bold mr-1" style="background:#22c55e;">A</span>
+              Origin
+            </label>
+            <button
+              id="btn-use-location"
+              class="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold"
+              style="background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
+            >
+              <span id="loc-icon">📍</span>
+              <span id="loc-label">Use my location</span>
+              <span id="loc-spinner" style="display:none;width:12px;height:12px;border:2px solid rgba(22,163,74,0.3);border-top-color:#16a34a;border-radius:50%;animation:spin 0.65s linear infinite;"></span>
+            </button>
+            <div id="origin-display" class="mt-1.5 px-3 py-1.5 rounded-lg text-xs font-mono" style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;display:none;"></div>
+            <p class="text-xs mt-1.5" style="color:#94a3b8;">or click the map to set origin</p>
+          </div>
+
+          <!-- Destination -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1.5">
+              <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-xs font-bold mr-1" style="background:#ef4444;">B</span>
+              Destination
+            </label>
+            <div class="relative">
+              <input
+                id="dest-search"
+                type="text"
+                placeholder="Search for a destination…"
+                class="w-full text-sm rounded-lg px-3 py-2 border border-slate-200 text-slate-700"
+                style="background:#fff;outline:none;transition:border-color 0.15s,box-shadow 0.15s;"
+                onfocus="this.style.borderColor='#93c5fd';this.style.boxShadow='0 0 0 3px rgba(147,197,253,0.25)';"
+                onblur="this.style.borderColor='';this.style.boxShadow='';"
+              />
+              <div id="dest-dropdown" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.1);z-index:200;max-height:180px;overflow-y:auto;"></div>
+            </div>
+            <div id="dest-display" class="mt-1.5 px-3 py-1.5 rounded-lg text-xs" style="background:#f8fafc;border:1px solid #e2e8f0;color:#64748b;display:none;"></div>
+          </div>
+
+          <!-- Analyse button -->
+          <button
+            id="btn-analyse"
+            class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white"
+            style="background:linear-gradient(135deg,#0f172a,#334155);box-shadow:0 4px 14px rgba(0,0,0,0.2);transition:opacity 0.15s,transform 0.15s;"
+            onmouseover="this.style.opacity='.88'"
+            onmouseout="this.style.opacity='1'"
+            onmousedown="this.style.transform='scale(0.98)'"
+            onmouseup="this.style.transform='scale(1)'"
+          >
+            <span id="analyse-label">Analyse Route</span>
+            <span id="analyse-spinner" class="spinner" style="display:none;"></span>
+          </button>
+
+          <!-- Results -->
+          <div id="route-results" style="display:none;">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Results</p>
+              <button
+                id="btn-clear-route"
+                class="text-xs font-semibold"
+                style="color:#ef4444;"
+                onmouseover="this.style.color='#b91c1c'"
+                onmouseout="this.style.color='#ef4444'"
+              >Clear</button>
+            </div>
+            <div id="route-cards"></div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -862,6 +933,12 @@
       var clickedLat, clickedLon;
 
       map.on("click", function (e) {
+        if (currentMode === 'route') {
+          _routeMapClick(e.latlng.lat, e.latlng.lng);
+          return;
+        }
+
+        // Cluster mode — single-point prediction
         clickedLat = e.latlng.lat.toFixed(6);
         clickedLon = e.latlng.lng.toFixed(6);
 
@@ -1035,33 +1112,478 @@
       var currentMode = 'clusters';
 
       function setMode(mode) {
-        if (mode === 'route') return;
+        var prev = currentMode;
         currentMode = mode;
 
-        var btnClusters   = document.getElementById('mode-btn-clusters');
-        var btnHeatmap    = document.getElementById('mode-btn-heatmap');
         var activeStyle   = 'background:#0f172a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.18);';
         var inactiveStyle = 'background:transparent;color:#64748b;box-shadow:none;';
+        ['clusters','heatmap','route'].forEach(function(m) {
+          var b = document.getElementById('mode-btn-' + m);
+          if (b) b.style.cssText = (m === mode) ? activeStyle : inactiveStyle;
+        });
 
+        // Tear down previous mode layers
+        Object.keys(riskLayers).forEach(function(r) { map.removeLayer(riskLayers[r]); });
+        map.removeLayer(accidentLayer);
+        if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+
+        // Sidebar section visibility
+        ['legend-section','sidebar-divider','click-prompt','prediction-panel'].forEach(function(id) {
+          document.getElementById(id).style.display = (mode === 'clusters') ? '' : 'none';
+        });
+        document.getElementById('mode-hint-heatmap').style.display = (mode === 'heatmap') ? 'block' : 'none';
+        document.getElementById('route-panel').style.display = (mode === 'route') ? '' : 'none';
+
+        // Clean up route artefacts when leaving route mode
+        if (prev === 'route' && mode !== 'route') {
+          _clearRouteArtefacts();
+        }
+
+        // Restore layers for new mode
         if (mode === 'clusters') {
-          btnClusters.style.cssText = activeStyle;
-          btnHeatmap.style.cssText  = inactiveStyle;
-          Object.keys(riskLayers).forEach(function (r) {
+          Object.keys(riskLayers).forEach(function(r) {
             if (riskActive[r]) map.addLayer(riskLayers[r]);
           });
           accidentLayer.addTo(map);
-          if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
-          document.getElementById('mode-hint-heatmap').style.display = 'none';
         } else if (mode === 'heatmap') {
-          btnHeatmap.style.cssText  = activeStyle;
-          btnClusters.style.cssText = inactiveStyle;
-          Object.keys(riskLayers).forEach(function (r) {
-            map.removeLayer(riskLayers[r]);
-          });
-          map.removeLayer(accidentLayer);
           heatLayer.addTo(map);
-          document.getElementById('mode-hint-heatmap').style.display = 'block';
         }
+        // route mode: no base layers — route polylines drawn on demand
+      }
+
+      // ── Route Risk Analysis ────────────────────────────────────────────────────
+      var routeOrigin      = null;   // [lat, lon]
+      var routeDest        = null;   // [lat, lon]
+      var routeOriginMarker = null;
+      var routeDestMarker   = null;
+      var allRoutePolylines = [];    // [[L.polyline, ...], ...]  one array per route
+      var routeClickState   = 0;     // 0 = waiting for origin, 1 = waiting for dest
+      var nominatimTimer    = null;
+      var peakRiskMarkers   = [];
+      var _analyseStepTimer = null;
+
+      var segColors = { Slight: '#3b82f6', Serious: '#f97316', Fatal: '#ef4444' };
+      var rlColors  = { CRITICAL: '#ef4444', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#3b82f6' };
+
+      // ── Marker helpers ─────────────────────────────────────────────────────────
+      function _originIcon() {
+        return L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#22c55e;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+          iconSize: [14, 14], iconAnchor: [7, 7],
+        });
+      }
+      function _destIcon() {
+        return L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+          iconSize: [14, 14], iconAnchor: [7, 7],
+        });
+      }
+
+      function _setOriginMarker(lat, lon) {
+        if (routeOriginMarker) map.removeLayer(routeOriginMarker);
+        routeOriginMarker = L.marker([lat, lon], { icon: _originIcon() }).addTo(map);
+      }
+      function _setDestMarker(lat, lon) {
+        if (routeDestMarker) map.removeLayer(routeDestMarker);
+        routeDestMarker = L.marker([lat, lon], { icon: _destIcon() }).addTo(map);
+      }
+
+      // ── Display helpers ────────────────────────────────────────────────────────
+      function _showOrigin(lat, lon, label) {
+        routeOrigin = [lat, lon];
+        _setOriginMarker(lat, lon);
+        var d = document.getElementById('origin-display');
+        d.textContent = label || (lat.toFixed(5) + ', ' + lon.toFixed(5));
+        d.style.display = '';
+        routeClickState = 1;
+      }
+      function _showDest(lat, lon, label) {
+        routeDest = [lat, lon];
+        _setDestMarker(lat, lon);
+        var d = document.getElementById('dest-display');
+        d.textContent = label || (lat.toFixed(5) + ', ' + lon.toFixed(5));
+        d.style.display = '';
+        if (!label) {
+          document.getElementById('dest-search').value = lat.toFixed(5) + ', ' + lon.toFixed(5);
+        }
+      }
+
+      // ── Map click for route pins ───────────────────────────────────────────────
+      function _routeMapClick(lat, lon) {
+        if (routeClickState === 0) {
+          _showOrigin(lat, lon);
+        } else if (!routeDest) {
+          _showDest(lat, lon);
+        }
+      }
+
+      // ── Geolocation ────────────────────────────────────────────────────────────
+      document.getElementById('btn-use-location').addEventListener('click', function() {
+        if (!navigator.geolocation) {
+          document.getElementById('origin-display').textContent = 'Geolocation not supported by this browser.';
+          document.getElementById('origin-display').style.display = '';
+          return;
+        }
+        document.getElementById('loc-label').textContent = 'Locating…';
+        document.getElementById('loc-spinner').style.display = 'inline-block';
+        document.getElementById('loc-icon').style.display    = 'none';
+        navigator.geolocation.getCurrentPosition(
+          function(pos) {
+            document.getElementById('loc-label').textContent  = 'Use my location';
+            document.getElementById('loc-spinner').style.display = 'none';
+            document.getElementById('loc-icon').style.display    = '';
+            _showOrigin(pos.coords.latitude, pos.coords.longitude);
+            map.setView([pos.coords.latitude, pos.coords.longitude], 14);
+          },
+          function() {
+            document.getElementById('loc-label').textContent  = 'Location denied';
+            document.getElementById('loc-spinner').style.display = 'none';
+            document.getElementById('loc-icon').style.display    = '';
+          }
+        );
+      });
+
+      // ── Nominatim destination search ───────────────────────────────────────────
+      document.getElementById('dest-search').addEventListener('input', function() {
+        clearTimeout(nominatimTimer);
+        var q = this.value.trim();
+        if (q.length < 3) { _hideDropdown(); return; }
+        nominatimTimer = setTimeout(function() { _nominatimSearch(q); }, 500);
+      });
+
+      document.getElementById('dest-search').addEventListener('blur', function() {
+        setTimeout(_hideDropdown, 200);
+      });
+
+      function _nominatimSearch(q) {
+        var url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=5';
+        fetch(url, { headers: { 'User-Agent': 'traffic-hotspot-fyp' } })
+          .then(function(r) { return r.json(); })
+          .then(function(results) { _showDropdown(results); })
+          .catch(function() { _hideDropdown(); });
+      }
+
+      function _showDropdown(results) {
+        var dd = document.getElementById('dest-dropdown');
+        dd.innerHTML = '';
+        if (!results || !results.length) { _hideDropdown(); return; }
+        results.forEach(function(r) {
+          var item = document.createElement('div');
+          item.style.cssText = 'padding:9px 12px;font-size:12px;color:#374151;cursor:pointer;border-bottom:1px solid #f1f5f9;line-height:1.4;';
+          item.textContent = r.display_name;
+          item.onmouseenter = function() { this.style.background = '#f8fafc'; };
+          item.onmouseleave = function() { this.style.background = ''; };
+          item.addEventListener('click', function() {
+            _showDest(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',')[0]);
+            document.getElementById('dest-search').value = r.display_name.split(',')[0];
+            _hideDropdown();
+            map.setView([parseFloat(r.lat), parseFloat(r.lon)], 14);
+          });
+          dd.appendChild(item);
+        });
+        dd.style.display = '';
+      }
+
+      function _hideDropdown() {
+        document.getElementById('dest-dropdown').style.display = 'none';
+      }
+
+      // ── Analyse route ──────────────────────────────────────────────────────────
+      document.getElementById('btn-analyse').addEventListener('click', function() {
+        if (!routeOrigin) {
+          document.getElementById('origin-display').textContent = 'Please set an origin first.';
+          document.getElementById('origin-display').style.display = '';
+          return;
+        }
+        if (!routeDest) {
+          document.getElementById('dest-display').textContent = 'Please set a destination first.';
+          document.getElementById('dest-display').style.display = '';
+          return;
+        }
+
+        var btn = this;
+        var _steps = ['Fetching route…', 'Getting weather conditions…', 'Analysing risk segments…'];
+        var _stepIdx = 0;
+        document.getElementById('analyse-label').textContent = _steps[0];
+        document.getElementById('analyse-spinner').style.display = 'inline-block';
+        btn.disabled = true;
+        btn.style.opacity = '.7';
+        _analyseStepTimer = setInterval(function() {
+          _stepIdx = (_stepIdx + 1) % _steps.length;
+          document.getElementById('analyse-label').textContent = _steps[_stepIdx];
+        }, 800);
+
+        fetch('/api/route-risk/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ origin: routeOrigin, destination: routeDest }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            clearInterval(_analyseStepTimer);
+            document.getElementById('analyse-label').textContent = 'Done';
+            setTimeout(_resetAnalyseBtn, 500);
+            if (data.status === 'success') {
+              _drawRoutes(data.routes);
+              _showRouteResults(data.routes, data);
+              _drawPeakRiskMarkers(data.routes);
+            } else {
+              document.getElementById('dest-display').textContent = 'Error: ' + (data.message || 'Unknown error');
+              document.getElementById('dest-display').style.display = '';
+            }
+          })
+          .catch(function() {
+            clearInterval(_analyseStepTimer);
+            _resetAnalyseBtn();
+            document.getElementById('dest-display').textContent = 'Network error — please try again.';
+            document.getElementById('dest-display').style.display = '';
+          });
+      });
+
+      function _resetAnalyseBtn() {
+        clearInterval(_analyseStepTimer);
+        document.getElementById('analyse-label').textContent = 'Analyse Route';
+        document.getElementById('analyse-spinner').style.display = 'none';
+        document.getElementById('btn-analyse').disabled = false;
+        document.getElementById('btn-analyse').style.opacity = '1';
+      }
+
+      // ── Draw polylines ─────────────────────────────────────────────────────────
+      function _drawRoutes(routes) {
+        _clearRoutePolylines();
+        routes.forEach(function(route, routeIdx) {
+          var pls     = [];
+          var segs    = route.segments;
+          var primary = routeIdx === 0;
+          for (var i = 0; i < segs.length - 1; i++) {
+            var pl = L.polyline(
+              [[segs[i].lat, segs[i].lon], [segs[i+1].lat, segs[i+1].lon]],
+              {
+                color:   segColors[segs[i].prediction] || '#94a3b8',
+                weight:  primary ? 6 : 4,
+                opacity: primary ? 0.9 : 0.45,
+              }
+            ).addTo(map);
+            pls.push(pl);
+          }
+          allRoutePolylines.push(pls);
+        });
+        // Fit to safest route
+        if (allRoutePolylines[0] && allRoutePolylines[0].length) {
+          try {
+            map.fitBounds(L.featureGroup(allRoutePolylines[0]).getBounds().pad(0.1));
+          } catch(e) {}
+        }
+      }
+
+      function _clearRoutePolylines() {
+        allRoutePolylines.forEach(function(pls) {
+          pls.forEach(function(pl) { map.removeLayer(pl); });
+        });
+        allRoutePolylines = [];
+      }
+
+      function _highlightRoute(idx) {
+        allRoutePolylines.forEach(function(pls, ri) {
+          var primary = ri === idx;
+          pls.forEach(function(pl) {
+            pl.setStyle({ weight: primary ? 6 : 4, opacity: primary ? 0.9 : 0.3 });
+            if (primary) pl.bringToFront();
+          });
+        });
+        document.querySelectorAll('.route-result-card').forEach(function(card, ci) {
+          card.style.borderColor = ci === idx ? '#0f172a' : '#e2e8f0';
+          card.style.boxShadow   = ci === idx ? '0 0 0 1px #0f172a' : 'none';
+        });
+      }
+
+      // ── Results sidebar ────────────────────────────────────────────────────────
+      function _showRouteResults(routes, meta) {
+        var container = document.getElementById('route-cards');
+        container.innerHTML = '';
+        meta = meta || {};
+
+        // Recommendation banner
+        if (routes.length > 1 && meta.recommendation) {
+          var banner = document.createElement('div');
+          banner.style.cssText = 'background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:11px;color:#0369a1;line-height:1.5;font-weight:600;';
+          banner.textContent = meta.recommendation;
+          container.appendChild(banner);
+        }
+
+        // Comparison line
+        if (routes.length > 1) {
+          var compLine = document.createElement('div');
+          compLine.style.cssText = 'font-size:11px;color:#64748b;margin-bottom:10px;line-height:1.6;';
+          var compParts = routes.map(function(r, i) {
+            return 'Route ' + (i + 1) + ': ' + r.risk_level
+              + ' · ' + (r.distance_metres / 1000).toFixed(1)
+              + 'km · ' + Math.round(r.duration_seconds / 60) + 'min';
+          });
+          compLine.textContent = compParts.join('  vs  ');
+          container.appendChild(compLine);
+        }
+
+        routes.forEach(function(route, idx) {
+          var rl       = route.risk_level;
+          var color    = rlColors[rl] || '#94a3b8';
+          var primary  = idx === 0;
+          var distKm   = (route.distance_metres / 1000).toFixed(1);
+          var durMin   = Math.round(route.duration_seconds / 60);
+          var sc       = route.segment_counts || {};
+          var peakSegs = route.peak_risk_segments || [];
+          var expandId = 'peak-zones-' + idx;
+
+          // Build subtitle
+          var subtitleParts = [];
+          if (meta.time_context)         subtitleParts.push(meta.time_context);
+          if (route.weather_description) subtitleParts.push(route.weather_description);
+          var subtitleHtml = subtitleParts.length
+            ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">' + subtitleParts.join(' &middot; ') + '</div>'
+            : '';
+
+          // Build peak risk zones section
+          var peakHtml = '';
+          if (peakSegs.length > 0) {
+            var zonesHtml = peakSegs.map(function(p) {
+              var dotColor = p.prediction === 'Fatal' ? '#ef4444' : '#f97316';
+              return '<div class="peak-zone-item" data-lat="' + p.lat + '" data-lon="' + p.lon + '" '
+                + 'style="font-size:11px;color:' + dotColor + ';padding:4px 0;border-bottom:1px solid #fee2e2;line-height:1.4;cursor:pointer;">'
+                + '&#x1F4CD; ' + p.description
+                + '</div>';
+            }).join('');
+            peakHtml = '<button class="expand-peak-btn" data-target="' + expandId + '" '
+              + 'style="font-size:11px;color:#3b82f6;background:none;border:none;cursor:pointer;padding:0;margin-bottom:4px;display:block;">'
+              + 'Show risk zones &#9660;</button>'
+              + '<div id="' + expandId + '" style="display:none;margin-bottom:4px;">' + zonesHtml + '</div>';
+          }
+
+          var card = document.createElement('div');
+          card.className = 'route-result-card';
+          card.style.cssText = 'padding:14px;border-radius:12px;border:2px solid '
+            + (primary ? '#0f172a' : '#e2e8f0')
+            + ';box-shadow:' + (primary ? '0 2px 8px rgba(0,0,0,0.1)' : 'none')
+            + ';cursor:pointer;margin-bottom:10px;transition:border-color 0.15s,box-shadow 0.15s;background:#fff;';
+
+          card.innerHTML =
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">'
+            + '<span style="font-size:11px;font-weight:700;color:#fff;background:' + color + ';padding:2px 9px;border-radius:20px;">' + rl + '</span>'
+            + (primary
+                ? '<span style="font-size:10px;font-weight:700;color:#16a34a;">&#9733; Safest</span>'
+                : '<span style="font-size:10px;color:#94a3b8;">Route ' + (idx + 1) + '</span>')
+            + '</div>'
+            + '<div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:3px;">' + distKm + ' km &middot; ' + durMin + ' min</div>'
+            + subtitleHtml
+            + '<div style="font-size:12px;color:#475569;margin-bottom:8px;line-height:1.5;">' + (route.summary || '') + '</div>'
+            + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">'
+            + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#dbeafe;color:#1d4ed8;">' + (sc.Slight  || 0) + ' Slight</span>'
+            + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ffedd5;color:#c2410c;">' + (sc.Serious || 0) + ' Serious</span>'
+            + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#fee2e2;color:#b91c1c;">'  + (sc.Fatal   || 0) + ' Fatal</span>'
+            + '</div>'
+            + (route.safety_tip
+                ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:#92400e;line-height:1.5;">'
+                  + '&#x26A0;&#xFE0F; ' + route.safety_tip
+                  + '</div>'
+                : '')
+            + peakHtml;
+
+          // Card click highlights route; expand button and zone items are handled separately
+          (function(i) {
+            card.addEventListener('click', function(e) {
+              if (e.target.closest && (e.target.closest('.expand-peak-btn') || e.target.closest('.peak-zone-item'))) return;
+              _highlightRoute(i);
+            });
+          }(idx));
+
+          // Wire expand/collapse button
+          var expandBtn = card.querySelector('.expand-peak-btn');
+          if (expandBtn) {
+            expandBtn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var t = document.getElementById(this.dataset.target);
+              if (t) {
+                var isOpen = t.style.display !== 'none';
+                t.style.display = isOpen ? 'none' : 'block';
+                this.innerHTML = (isOpen ? 'Show' : 'Hide') + ' risk zones &#9660;';
+              }
+            });
+          }
+
+          // Wire zone item clicks — pan + pulse marker
+          card.querySelectorAll('.peak-zone-item').forEach(function(item) {
+            item.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var lat = parseFloat(this.dataset.lat);
+              var lon = parseFloat(this.dataset.lon);
+              map.setView([lat, lon], 16);
+              var marker = _findPeakMarker(lat, lon);
+              if (marker) {
+                marker.setRadius(16);
+                setTimeout(function() { marker.setRadius(8); }, 600);
+              }
+            });
+          });
+
+          container.appendChild(card);
+        });
+
+        document.getElementById('route-results').style.display = '';
+      }
+
+      // ── Peak risk zone markers ─────────────────────────────────────────────────
+      function _findPeakMarker(lat, lon) {
+        for (var i = 0; i < peakRiskMarkers.length; i++) {
+          var ll = peakRiskMarkers[i].getLatLng();
+          if (Math.abs(ll.lat - lat) < 0.00001 && Math.abs(ll.lng - lon) < 0.00001) {
+            return peakRiskMarkers[i];
+          }
+        }
+        return null;
+      }
+
+      function _drawPeakRiskMarkers(routes) {
+        peakRiskMarkers.forEach(function(m) { map.removeLayer(m); });
+        peakRiskMarkers = [];
+        routes.forEach(function(route) {
+          (route.peak_risk_segments || []).forEach(function(seg) {
+            var borderColor = seg.prediction === 'Fatal' ? '#ef4444' : '#f97316';
+            var m = L.circleMarker([seg.lat, seg.lon], {
+              radius:      8,
+              fillColor:   '#fff',
+              color:       borderColor,
+              weight:      3,
+              fillOpacity: 1.0,
+              opacity:     0.95,
+            })
+              .bindTooltip(seg.description, { direction: 'top', offset: [0, -8] })
+              .addTo(map);
+            peakRiskMarkers.push(m);
+          });
+        });
+      }
+
+      // ── Clear route ────────────────────────────────────────────────────────────
+      document.getElementById('btn-clear-route').addEventListener('click', _clearRouteArtefacts);
+
+      function _clearRouteArtefacts() {
+        _clearRoutePolylines();
+        peakRiskMarkers.forEach(function(m) { map.removeLayer(m); });
+        peakRiskMarkers = [];
+        if (routeOriginMarker) { map.removeLayer(routeOriginMarker); routeOriginMarker = null; }
+        if (routeDestMarker)   { map.removeLayer(routeDestMarker);   routeDestMarker   = null; }
+        routeOrigin = null;
+        routeDest   = null;
+        routeClickState = 0;
+        document.getElementById('origin-display').style.display = 'none';
+        document.getElementById('origin-display').textContent   = '';
+        document.getElementById('dest-display').style.display   = 'none';
+        document.getElementById('dest-display').textContent     = '';
+        document.getElementById('dest-search').value            = '';
+        document.getElementById('route-results').style.display  = 'none';
+        document.getElementById('route-cards').innerHTML        = '';
+        document.getElementById('loc-label').textContent        = 'Use my location';
       }
 
       // ── Mobile sidebar toggle ──────────────────────────────────────────────────

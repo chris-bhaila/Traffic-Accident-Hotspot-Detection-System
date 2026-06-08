@@ -10,19 +10,35 @@ import django
 django.setup()
 
 import pandas as pd
-from accidents.models import AccidentRecord, TreeEvaluation
-from predictions.decision_tree import prepare_features, build_tree, predict_batch
+from accidents.models import AccidentRecord, HotspotCluster, TreeEvaluation
+from predictions.dbscan import haversine_distance
+from predictions.decision_tree import prepare_features, build_tree, predict_batch, bin_proximity
 
 CLASSES = ["Slight", "Serious", "Fatal"]
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 print("Loading UK_STATS19 records from database...")
 qs = AccidentRecord.objects.filter(source="UK_STATS19").values(
+    "latitude", "longitude",
     "day_of_week", "weather_condition", "road_type",
     "light_condition", "speed_limit", "junction_type", "severity", "time",
 )
 df = pd.DataFrame(list(qs))
 print(f"  {len(df)} records loaded.")
+
+# Compute proximity_to_hotspot for each record
+centroids = list(HotspotCluster.objects.values_list("centroid_latitude", "centroid_longitude"))
+print(f"  {len(centroids)} cluster centroids loaded.")
+
+def _nearest_dist(row):
+    if not centroids:
+        return float("inf")
+    return min(haversine_distance(row["latitude"], row["longitude"], c_lat, c_lon)
+               for c_lat, c_lon in centroids)
+
+df["proximity_to_hotspot"] = df.apply(
+    lambda row: bin_proximity(_nearest_dist(row)), axis=1
+)
 
 features, labels = prepare_features(df)
 print(f"  {len(features)} samples prepared.")

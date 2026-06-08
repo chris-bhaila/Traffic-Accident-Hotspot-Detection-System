@@ -62,6 +62,18 @@ def bin_road(road):
         return "other"
 
 
+def bin_proximity(distance_metres):
+    """Bin Haversine distance to nearest hotspot cluster centroid."""
+    if distance_metres < 200:
+        return "hotspot_core"
+    elif distance_metres < 500:
+        return "hotspot_near"
+    elif distance_metres < 1000:
+        return "hotspot_fringe"
+    else:
+        return "no_hotspot"
+
+
 def prepare_features(df):
     """
     Convert raw accident data into binned categorical features.
@@ -80,6 +92,7 @@ def prepare_features(df):
             "road_type": bin_road(row["road_type"]),
             "light": bin_light(row["light_condition"]),
             "speed": bin_speed(row["speed_limit"] if row["speed_limit"] else 30),
+            "proximity_to_hotspot": row.get("proximity_to_hotspot", "no_hotspot"),
         }
         features.append(feature)
         labels.append(row["severity"])

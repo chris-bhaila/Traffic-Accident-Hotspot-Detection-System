@@ -227,6 +227,45 @@
           </div>
         </div>
 
+        <!-- Map Mode ───────────────────────────────────────────────────────────── -->
+        <div>
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
+            Map Mode
+          </p>
+          <div
+            class="flex rounded-xl p-1 gap-1"
+            style="background:#f1f5f9;border:1px solid #e2e8f0;"
+          >
+            <button
+              id="mode-btn-clusters"
+              onclick="setMode('clusters')"
+              class="flex-1 text-xs font-semibold py-2 rounded-lg transition-all"
+              style="background:#0f172a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.18);"
+            >Clusters</button>
+            <button
+              id="mode-btn-heatmap"
+              onclick="setMode('heatmap')"
+              class="flex-1 text-xs font-semibold py-2 rounded-lg transition-all"
+              style="background:transparent;color:#64748b;"
+            >Heatmap</button>
+            <button
+              id="mode-btn-route"
+              disabled
+              class="flex-1 rounded-lg py-2"
+              style="background:transparent;cursor:not-allowed;"
+              title="Coming Soon"
+            >
+              <span class="block text-xs font-semibold" style="color:#cbd5e1;">Route</span>
+              <span class="block" style="font-size:9px;font-weight:500;color:#d1d5db;margin-top:1px;">soon</span>
+            </button>
+          </div>
+          <p
+            id="mode-hint-heatmap"
+            class="text-xs text-slate-400 mt-2 leading-relaxed"
+            style="display:none;"
+          >Density weighted by severity: green → yellow → red.</p>
+        </div>
+
         <!-- Legend ─────────────────────────────────────────────────────────────── -->
         <div>
           <div class="flex items-center justify-between mb-3">
@@ -612,6 +651,7 @@
     <!-- ═══ SCRIPTS ═══════════════════════════════════════════════════════════════ -->
     {{ accidents|json_script:"accidents-data" }}
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <script>
       // ── Map setup ──────────────────────────────────────────────────────────────
       var map = L.map("map", {
@@ -759,7 +799,7 @@
           var risk = this.getAttribute("data-risk");
           riskActive[risk] = !riskActive[risk];
           if (riskActive[risk]) {
-            map.addLayer(riskLayers[risk]);
+            if (currentMode === 'clusters') map.addLayer(riskLayers[risk]);
             this.style.opacity = "1";
             this.querySelector("span").style.textDecoration = "none";
           } else {
@@ -780,7 +820,7 @@
           var risk = el.getAttribute("data-risk");
           riskActive[risk] = nextState;
           if (nextState) {
-            map.addLayer(riskLayers[risk]);
+            if (currentMode === 'clusters') map.addLayer(riskLayers[risk]);
             el.style.opacity = "1";
             el.querySelector("span").style.textDecoration = "none";
           } else {
@@ -971,6 +1011,53 @@
         spinner.style.display = "none";
         btn.disabled          = false;
         btn.style.opacity     = "1";
+      }
+
+      // ── Heatmap layer ──────────────────────────────────────────────────────────
+      var heatData = accidents.map(function (acc) {
+        var intensity = acc.severity === 'Fatal' ? 1.0 :
+                        acc.severity === 'Serious' ? 0.6 : 0.3;
+        return [acc.latitude, acc.longitude, intensity];
+      });
+      var heatLayer = L.heatLayer(heatData, {
+        radius:  25,
+        blur:    15,
+        maxZoom: 17,
+        max:     1.0,
+        gradient: { 0.0: 'green', 0.5: 'yellow', 1.0: 'red' },
+      });
+
+      // ── Map mode switching ─────────────────────────────────────────────────────
+      var currentMode = 'clusters';
+
+      function setMode(mode) {
+        if (mode === 'route') return;
+        currentMode = mode;
+
+        var btnClusters   = document.getElementById('mode-btn-clusters');
+        var btnHeatmap    = document.getElementById('mode-btn-heatmap');
+        var activeStyle   = 'background:#0f172a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.18);';
+        var inactiveStyle = 'background:transparent;color:#64748b;box-shadow:none;';
+
+        if (mode === 'clusters') {
+          btnClusters.style.cssText = activeStyle;
+          btnHeatmap.style.cssText  = inactiveStyle;
+          Object.keys(riskLayers).forEach(function (r) {
+            if (riskActive[r]) map.addLayer(riskLayers[r]);
+          });
+          accidentLayer.addTo(map);
+          if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+          document.getElementById('mode-hint-heatmap').style.display = 'none';
+        } else if (mode === 'heatmap') {
+          btnHeatmap.style.cssText  = activeStyle;
+          btnClusters.style.cssText = inactiveStyle;
+          Object.keys(riskLayers).forEach(function (r) {
+            map.removeLayer(riskLayers[r]);
+          });
+          map.removeLayer(accidentLayer);
+          heatLayer.addTo(map);
+          document.getElementById('mode-hint-heatmap').style.display = 'block';
+        }
       }
 
       // ── Mobile sidebar toggle ──────────────────────────────────────────────────

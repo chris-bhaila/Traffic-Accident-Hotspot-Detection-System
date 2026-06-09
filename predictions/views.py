@@ -283,6 +283,15 @@ def _avg_score_to_risk_level(avg):
         return "MEDIUM"
     return "LOW"
 
+def debug_centroids(request):
+    from django.http import JsonResponse
+    from accidents.models import HotspotCluster
+    db_clusters = list(HotspotCluster.objects.values('centroid_latitude', 'centroid_longitude')[:5])
+    return JsonResponse({
+        'cluster_centroids_loaded': len(CLUSTER_CENTROIDS),
+        'first_5_centroids': CLUSTER_CENTROIDS[:5],
+        'first_5_from_db': db_clusters,
+    })
 
 @csrf_exempt
 def route_risk(request):

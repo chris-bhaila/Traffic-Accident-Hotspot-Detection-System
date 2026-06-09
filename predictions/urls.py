@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from predictions.views import debug_centroids
 
 urlpatterns = [
     path("predict/", views.predict_risk, name="predict_risk"),
